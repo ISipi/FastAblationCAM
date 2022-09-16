@@ -26,6 +26,7 @@ class ImportTfrecord:
     @tf.function
     def preprocess(self, x: Any) -> Any:
         """ Preprocess the input images according to the pre-trained neural network's specifications """
+
         if self.network == 'densenet121' or self.network == 'densenet169' or self.network == 'densenet201':
             x = tf.keras.applications.densenet.preprocess_input(x)
         elif self.network == 'inception_resnet':
@@ -51,6 +52,7 @@ class ImportTfrecord:
             'depth': tf.io.FixedLenFeature([], tf.int64, default_value=3),
             'filename': tf.io.FixedLenFeature([], tf.string, default_value=''),}
         """
+
         feature_description = {
             'label': tf.io.FixedLenFeature([], tf.int64, default_value=-1),
             'image': tf.io.FixedLenFeature([], tf.string, default_value=''),
@@ -72,6 +74,7 @@ class ImportTfrecord:
         """
         Returns the test dataset as a TFRecordDataset
         """
+
         files = tf.data.Dataset.list_files(self.test_file)
         test_dataset = tf.data.TFRecordDataset(files)
         test_dataset = test_dataset.map(map_func=lambda test_dataset: self.read_single_tfrecord(test_dataset),
