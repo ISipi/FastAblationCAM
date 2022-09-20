@@ -1,11 +1,11 @@
 import tensorflow as tf
 from typing import Any, List, Tuple
-import os
+from os import path
 import numpy as np
 from natsort import natsorted
 
 
-class ImportTfrecord:
+class Polen23eTestData:
 
     def __init__(self, network: str, num_classes: int):
         self.network = network
@@ -21,7 +21,7 @@ class ImportTfrecord:
         else:
             tf_records_base_folder = f"./test_data/224_tfrecords"
 
-        return os.path.join(os.path.abspath(tf_records_base_folder), 'test.tfrecords')
+        return path.join(path.abspath(tf_records_base_folder), 'test.tfrecords')
 
     @tf.function
     def preprocess(self, x: Any) -> Any:
@@ -87,13 +87,15 @@ class ImportTfrecord:
 
     @staticmethod
     def get_class_names(filenames) -> Tuple[List, List]:
+        """ returns class names and file names """
+
         # decode filenames from bytes to UTF-8:
         bytenames = np.array(filenames)
         non_byte_filenames = [i.decode("utf-8") for i in bytenames]
         # pollen class names:
         class_names = []
         for i in non_byte_filenames:
-            path = os.path.dirname(i)
-            class_names.append(os.path.basename(path))
+            file_path = path.dirname(i)
+            class_names.append(path.basename(file_path))
         class_names = natsorted(set(class_names))
         return class_names, non_byte_filenames

@@ -1,5 +1,5 @@
 from tensorflow import keras
-from typing import Any
+from typing import Any, List
 import tensorflow as tf
 import cv2
 import numpy as np
@@ -7,50 +7,57 @@ from os import path, listdir, makedirs
 import cmapy
 
 
-class AblationLayer(keras.layers.Layer):
-    def __init__(self, reference_activations: Any, ablation_value: int = 0):
-        super(AblationLayer, self).__init__()
+class FastAblationLayer(keras.layers.Layer):
+    def __init__(self, reference_activations: Any, ablation_value: int = 0, trainable: bool = False, *args, **kwargs):
+        super(FastAblationLayer, self).__init__()
         self.filter_location = [0, 0]
-        self.shape_out = reference_activations.shape
+        self.output_dim = reference_activations.shape
         self.reference_activations = reference_activations
         self.ablation_value = ablation_value
         self.width = 0
         self.height = 0
+        self.trainable = trainable
 
-    def call(self, inputs) -> tf.reshape:
-        """ Perform ablation. """
+    def build(self, input_shape):
+        """ builds the layer by initializing the weights using the activations from the input convolutional layer """
+
+        init = tf.constant_initializer(self.reference_activations.numpy())
+        self.w = self.add_weight(name='Ablation',
+                                 shape=self.output_dim, initializer=init,
+                                 trainable=self.trainable)
+
+        super(FastAblationLayer, self).build(input_shape)
+
+    def call(self, inputs, *args, **kwargs):
+        """
+            updates the weights by choosing a single (width, height) location and sets all values to zero, depthwise,
+            at that location.
+        """
 
         self.filter_location = [self.height, self.width]
         updates = self.reference_activations.numpy()
         updates[:, self.filter_location[0], self.filter_location[1], :] *= self.ablation_value
         updates = tf.convert_to_tensor(updates)
-        output = tf.reshape(updates, shape=self.shape_out)
-
-        if self.width < self.shape_out[1]-1:
+        self.w = tf.reshape(updates, shape=self.output_dim)
+        if self.width < self.output_dim[1]-1:
             self.width += 1
         else:
             self.width = 0
-            if self.height < self.shape_out[2]-1:
+            if self.height < self.output_dim[2]-1:
                 self.height += 1
             else:
                 self.height = 0
 
-        return output
+        return self.w
 
 
-class AblationCAM:
-    def __init__(self, model: Any):
+class FastAblationCAM:
+    def __init__(self, model: Any, conv_layers: List, last_conv_layer: Any):
 
         # Initialize class:
         self.model = model
-
-        # load_checkpoint init:
-        self.status = None
-
-        # create_iterated_model init:
-        self.iterated_model = None
-        self.select_conv_layer = None
-        self.conv_layers = None
+        self.select_conv_layer = last_conv_layer
+        self.conv_layers = conv_layers
 
         # setup_ablation_cam init:
         self.img = None
@@ -64,49 +71,7 @@ class AblationCAM:
         # run_ablation_cam init:
         self.class_score_change = None
 
-    def load_checkpoint(self, checkpoint_dir: str, checkpoint_name: str = None,
-                        only_look_for_last_save: bool = True) -> None:
-        """
-        If only_look_for_last is set to True, this method will look for a checkpoint with 'best_weights' in it and
-        cut at the first '.' character. Else, you must provide a checkpoint_name.
-
-        :param checkpoint_dir: the folder where the checkpoints are located
-        :param checkpoint_name: the name of the checkpoint file
-        :param only_look_for_last_save: switch to False if the checkpoint file doesn't include 'best_weights' in the
-        name. Otherwise use True.
-        :return: None
-        """
-
-        if only_look_for_last_save:
-            for i in listdir(checkpoint_dir):
-                if "best_weights" in i:
-                    checkpoint_name = i[:i.index(".")]
-        optimizer = keras.optimizers.SGD(learning_rate=0.005)
-        checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=self.model)
-        manager = tf.train.CheckpointManager(checkpoint,
-                                             directory=checkpoint_dir,
-                                             checkpoint_name=checkpoint_name,
-                                             max_to_keep=1)
-        self.status = checkpoint.restore(manager.latest_checkpoint)
-
-    def create_iterated_model(self, select_conv_layer: int = -1) -> None:
-        """
-        Loops through the model and finds the final layer with either 'conv' or 'convolution' in its name.
-
-        :param select_conv_layer: -1 gives the last convolutional layer, use integers if interested in another layer
-        :return: None
-        """
-
-        self.select_conv_layer = select_conv_layer
-        self.conv_layers = []
-        for layer in self.model.layers:
-            if 'conv' in layer.name or 'convolution' in layer.name:
-                self.conv_layers.append(layer.name)
-
-        last_conv_layer = self.model.get_layer(self.conv_layers[self.select_conv_layer])
-        self.iterated_model = keras.Model(self.model.inputs, [self.model.output, last_conv_layer.output])
-
-    def setup_ablation_cam(self, input_img: Any, img_label: int, str_label: str, ablation_value: int = 0) -> None:
+    def setup_fast_ablation_cam(self, input_img: Any, img_label: int, str_label: str, ablation_value: int = 0) -> None:
         """
         Give the test image and its class label (as an integer) to setup Ablation-CAM.
 
@@ -124,11 +89,11 @@ class AblationCAM:
         self.str_label = str_label
 
         # get the baseline reference class score and activations:
-        self.reference_model_out, self.reference_activations = self.iterated_model(self.img)
+        self.reference_model_out, self.reference_activations = self.model(self.img)
         self.shape_out = self.reference_activations.shape
         self.ablation_value = ablation_value
 
-    def run_ablation_cam(self) -> None:
+    def run_fast_ablation_cam(self) -> None:
         """
         Run Ablation-CAM. Collects the difference in model prediction scores between the unmodified and modified models
         for the same image at each location of the final convolutional layer's activations.
@@ -138,14 +103,14 @@ class AblationCAM:
 
         self.class_score_change = []
         class_out = self.reference_model_out[:, self.img_label]
-        modified_model = self.ablation_cam(self.reference_activations, self.ablation_value)
+        modified_model = self.inject_fast_ablation(self.reference_activations, self.ablation_value)
         for j in range(self.shape_out[1]*self.shape_out[2]):
             modified_model_out = modified_model(self.img)
             modified_class_out = modified_model_out[:, self.img_label]
             self.class_score_change.append(float(class_out - modified_class_out))
-            print(modified_class_out)
+            print(modified_class_out, f"{((j+1)/(self.shape_out[1]*self.shape_out[2]))*100:.2f} % complete")
 
-    def ablation_cam(self, reference_activations: Any, ablation_value: int) -> Any:
+    def inject_fast_ablation(self, reference_activations: Any, ablation_value: int) -> Any:
         """
         This method does the heavy lifting of Ablation-CAM by injecting the ablation layer after the last convolutional
         layer and ties the different parts of the model together.
@@ -158,10 +123,11 @@ class AblationCAM:
         # we only want to modify the original model, not replace:
         model_to_modify = self.model
 
-        # get the output from
+        # take the activations from the chosen conv layer and initialize the FastAblation layer
         find_conv_layer = model_to_modify.get_layer(self.conv_layers[self.select_conv_layer])
-        new_layer = AblationLayer(reference_activations, ablation_value)(find_conv_layer.output)
+        new_layer = FastAblationLayer(reference_activations, ablation_value)(find_conv_layer.output)
 
+        # find the layers that come after the injected layer
         layers_after_modification = []
         for layer in reversed(model_to_modify.layers):
             if layer.name != self.conv_layers[self.select_conv_layer]:
@@ -169,15 +135,31 @@ class AblationCAM:
             else:
                 break
 
+        # get the model configuration - needed for finding incoming layers for concatenation layers
+        model_conf = model_to_modify.get_config()['layers']
         x = new_layer
+
+        # loop through the layers after the injected layer in reverse and check whether the layer is a concatenation
+        # layer. If it is a concat layer, also find its inbound layers and, if applicable, replace the selected
+        # convolutional layer with the injected layer. If it's not a concat layer, just simply add after the previous.
         for layer_name in reversed(layers_after_modification):
             if 'concat' in layer_name:
-                x = model_to_modify.get_layer(layer_name)([x])
-            x = model_to_modify.get_layer(layer_name)(x)
+                previous_layers = []
+                for layer_conf in model_conf:
+                    if layer_conf['name'] == layer_name:
+                        for inbound_nodes in layer_conf['inbound_nodes'][0]:
+                            if inbound_nodes[0] != self.conv_layers[self.select_conv_layer]:
+                                previous_layers.append(model_to_modify.get_layer(inbound_nodes[0]).output)
+                            else:
+                                previous_layers.append(x)
+                x = model_to_modify.get_layer(layer_name)(previous_layers)
+            else:
+                x = model_to_modify.get_layer(layer_name)(x)
+
         modified_model = keras.models.Model(model_to_modify.inputs, [x])
         return modified_model
 
-    def make_ablation_heatmap(self, output_folder: str = "./ablationcam_output/") -> None:
+    def make_heatmap(self, output_folder: str = "./ablationcam_output/") -> None:
         """
         Create the heatmaps.
 
