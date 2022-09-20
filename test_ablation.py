@@ -11,17 +11,20 @@ Process:
 """
 
 import tensorflow as tf
-from os import path, curdir
+import os
+os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"
+os.environ["TF_CPP_VMODULE"] = "gpu_process_state=10,gpu_cudamallocasync_allocator=10"
 import numpy as np
 from tests.model_loading import training_model, PrepareModel
 from tests.data_import import Polen23eTestData  # [sic]
 from src.ablation.ablation import FastAblationCAM
 
+
 # basic settings:
 network = 'densenet169'
-checkpoint_dir = path.join(path.abspath(curdir), r'test_model_checkpoints/densenet169/fold 5')
+checkpoint_dir = os.path.join(os.path.abspath(os.curdir), r'tests/test_model_checkpoints/densenet169/fold 5')
 num_class = 23
-out_folder = path.join(path.abspath(curdir), f"test_output/{network}")
+out_folder = os.path.join(os.path.abspath(os.curdir), f"test_output/{network}")
 
 # (1) load test data:
 data_init = Polen23eTestData(network, num_class)
@@ -67,7 +70,7 @@ for enum, (img, one_hot_label, filename) in enumerate(zip(images, labels, non_by
     ablation_instance.setup_fast_ablation_cam(img, img_label, string_label, 0)
     ablation_instance.run_fast_ablation_cam()
 
-    output_folder = path.join(out_folder, f"{string_label}")
+    output_folder = os.path.join(out_folder, f"{string_label}")
     ablation_instance.make_heatmap(output_folder)
 
 
@@ -83,7 +86,7 @@ for enum, (img, one_hot_label, filename) in enumerate(zip(images, labels, non_by
         ablation_instance.setup_fast_ablation_cam(img, img_label, string_label, 0)
         ablation_instance.run_fast_ablation_cam()
 
-        output = path.join(out_folder, f"{string_label}")
+        output = os.path.join(out_folder, f"{string_label}")
         ablation_instance.make_heatmap(output)
         
 # currently, the method does not take magnitude of the change in class score into account when creating heatmaps

@@ -15,11 +15,11 @@ class Polen23eTestData:
     def get_test_set(self) -> str:
         # choose the test file
         if self.network == "inception_resnet" or self.network == "inception":
-            tf_records_base_folder = f"./test_data/299_tfrecords"
+            tf_records_base_folder = f"tests/test_data/299_tfrecords"
         elif self.network == "nasnet_large":
-            tf_records_base_folder = f"./test_data/331_tfrecords"
+            tf_records_base_folder = f"tests/test_data/331_tfrecords"
         else:
-            tf_records_base_folder = f"./test_data/224_tfrecords"
+            tf_records_base_folder = f"tests/test_data/224_tfrecords"
 
         return path.join(path.abspath(tf_records_base_folder), 'test.tfrecords')
 
