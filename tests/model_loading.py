@@ -40,7 +40,6 @@ def training_model(network: str, class_count: int, trainable: bool = False) -> k
 
     x = keras.layers.Dense(num_features)(feature_extractor_layer.output)
     x = keras.layers.Dense(class_count, activation='softmax')(x)
-
     model = keras.Model(inputs=feature_extractor_layer.inputs, outputs=x)
 
     print("Network constructed")
