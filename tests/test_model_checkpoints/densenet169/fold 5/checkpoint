@@ -1,0 +1,4 @@
+model_checkpoint_path: "fold_5_best_weights-7"
+all_model_checkpoint_paths: "fold_5_best_weights-7"
+all_model_checkpoint_timestamps: 1596078959.2387395
+last_preserved_timestamp: 1596078878.9644206
