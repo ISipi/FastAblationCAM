@@ -10,11 +10,14 @@ Process when running test_ablation.py (located in /tests/):
 1) Load POLEN23E test data and clean it up a little
 2) Initialize DenseNet-169 model without weights 
 3) Load model pre-trained weights from "./tests/test_model_checkpoints"
-4) Iterate through the model and get a new model that outputs the activations of the final convolutional layer alongside the model scores. This is where you can choose which convolutional layer to apply the FastAblationCAM.
+4) Iterate through the model and get a new model that outputs the activations of the final convolutional layer alongside the model scores. 
+   This is where you can choose which convolutional layer to apply the FastAblationCAM.
 5) Initialize FastAblationCAM with the new, iterated model
 6) Loop through test images and apply FastAblationCAM
 
-Note that early convolutional layers take forever to ablate and are less likely to produce a good result. The last convolutional layer is the default for a reason: it's faster and changing the values has a noticeable effect on the model performance, which results in nearly identical heat maps as Grad-CAM (scroll to the end of the page for examples).
+Note that early convolutional layers take forever to ablate and are less likely to produce a good result. 
+The last convolutional layer is the default for a reason: it's faster and changing the values has a noticeable 
+effect on the model performance, which results in nearly identical heat maps as Grad-CAM (scroll to the end of the page for examples).
 ```
 
 ## Introduction
